@@ -21,25 +21,52 @@ class ApiController extends AbstractController
         ]);
     }
 
-    #[Route('/api/verif-connexion', name: 'verif_connexion', methods: ['GET'])]
-    public function verifConnexion(
-        Request $request,
-        UserPasswordHasherInterface $passwordHasher,
-        ApiRegister $apiRegister,
-        UserRepository $userRepository
-    ): Response{
-        // Récupérer le mail et le mot de passe depuis la requête GET
-        $email = $request->query->get('email');
+    #[Route('/api/verif', name:'app_api_verif')]
+    public function verif(ApiRegister $apiRegister, UserPasswordHasherInterface $hash
+    , UserRepository $repo, Request $request):Response{
+
+        //récupérer le mail et le password
+        $mail = $request->query->get('email');
         $password = $request->query->get('password');
 
-        // Vérifier l'authentification 
-        $isAuthenticated = $apiRegister->authentification($passwordHasher, $userRepository, $email, $password);
+        //tester l'authentification
+        if($apiRegister->authentification($hash,$repo, $mail, $password)){
+            return $this->json(['connexion'=>'ok'], 200, ['Content-Type'=>'application/json',
+            'Access-Control-Allow-Origin'=> '*']);
+        }
+        else{
+            return $this->json(['connexion'=>'invalide'], 400, ['Content-Type'=>'application/json',
+            'Access-Control-Allow-Origin'=> '*']);
+        }
+    }
 
-        // Retourner la réponse JSON 
-        if ($isAuthenticated) {
-            return $this->json(['connexion' => 'ok'],200,[]);
-        } else {
-            return $this->json(['connexion' => 'invalide'],400,[]);
+
+    #[Route('/api/register', name:'app_api_register')]
+    public function getToken(Request $request, UserRepository $repo,
+        UserPasswordHasherInterface $hash, ApiRegister $apiRegister){
+        //récupération du paramètre email
+        $mail = $request->query->get('email');
+        //récupération du paramètre password
+        $password = $request->query->get('password');
+        //test si le paramétre mail n'est pas saisi
+        if(!$mail OR !$password){
+            return $this->json(['Error'=>'informations absentes'], 400,['Content-Type'=>'application/json',
+            'Access-Control-Allow-Origin'=> '*'] );
+        }
+        //test si le compte est authentifié
+        if($apiRegister->authentification($hash,$repo,$mail,$password)){
+            //récupération de la clé de chiffrement
+            $secretKey = $this->getParameter('token');
+            //génération du token
+            $token = $apiRegister->genToken($mail, $secretKey, $repo);
+            //Retourne le JWT
+            return $this->json(['Token_JWT'=>$token], 200, ['Content-Type'=>'application/json',
+            'Access-Control-Allow-Origin'=> '*']);
+        }
+        //test si le compte n'est pas authentifié (erreur mail ou password)
+        else{
+            return $this->json(['Error'=>'Informations de connexion incorrectes'], 400, ['Content-Type'=>'application/json',
+            'Access-Control-Allow-Origin'=> '*']);
         }
     }
 }
